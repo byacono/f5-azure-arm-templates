@@ -6,6 +6,7 @@
 
 ## Introduction
 
+Forked in order to support Availability Zones.
 Welcome to the GitHub repository for F5's ARM templates for Azure deployments.  All of the templates in this repository have been developed by F5 Networks engineers. Across all branches in this repository, there are two directories: *f5_supported* and *experimental*
 
   - **supported**<br>
