@@ -25,7 +25,19 @@
                 "description": "Password or SSH public key to login to the Virtual Machine. Note: There are a number of special characters that you should avoid using for F5 product user accounts.  See [K2873](https://support.f5.com/csp/article/K2873) for details. Note: If using key-based authentication, this should be the public key as a string, typically starting with **---- BEGIN SSH2 PUBLIC KEY ----** and ending with **---- END SSH2 PUBLIC KEY ----**."
             }, 
             "type": "securestring"
-        }, 
+        },
+        "availabilityOptions": {
+            "type": "string",
+            "allowedValues": [
+                "Availability Zone",
+                "Availability Set"
+            ],
+            "defaultValue": "Availability Zone",
+            "metadata": {
+                "description": "Choose your Availability options"
+            }
+
+        },
         "availabilityZoneRegion": {
            "type": "string",
            "allowedValues": [
@@ -34,7 +46,7 @@
            ],
            "defaultValue": "[resourceGroup().location]",
            "metadata": {
-                "description": "Region where the VM is located. Only certain regions support Availability Zones during preview."
+                "description": "Region where the VM is located. Only certain regions support Availability Zones during preview. Make Sure your region support Availability Zones. Not relevant if you selected Availability Set option above"
             }
         },
         "availabilityZone": {
@@ -46,7 +58,7 @@
             ],
             "defaultValue": "1",
             "metadata": {
-                "description": "Availability Zone number"
+                "description": "Availability Zone number. Not relevant if you selected Availability Set option above"
             }
         },
         "dnsLabel": {
@@ -282,7 +294,7 @@
             }
         }, 
         "computeApiVersion": "2018-04-01", 
-        "networkApiVersion": "2018-04-01", 
+        "networkApiVersion": "2017-11-01", 
         "storageApiVersion": "2018-07-01", 
         "location": "[resourceGroup().location]", 
         "adminPasswordOrKey": "[replace(parameters('adminPasswordOrKey'),'\\n', '\n')]", 
@@ -323,7 +335,8 @@
         }, 
         "bigIpNicPortValue": "[variables('bigIpNicPortMap')['1'].Port]", 
         "bigIpMgmtPort": "[variables('bigIpVersionPortMap')[variables('bigIpNicPortValue')].Port]", 
-        "instanceName": "[toLower(parameters('instanceName'))]", 
+        "instanceName": "[toLower(parameters('instanceName'))]",
+        "availabilitySetName": "[concat(variables('dnsLabel'), '-avset')]", 
         "availabilityZoneName": "[parameters('availabilityZone')]",
         "virtualNetworkName": "[concat(variables('dnsLabel'), '-vnet')]", 
         "vnetId": "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]", 
@@ -401,9 +414,25 @@
     }, 
     "resources": [
         {   
+            "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]", 
             "zones": ["[variables('availabilityZoneName')]"],
+            "name": "[concat(variables('mgmtPublicIPAddressName'), '-az', variables('availabilityZoneName'))]", 
+            "properties": {
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('dnsLabel')]"
+                }, 
+                "idleTimeoutInMinutes": 30, 
+                "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
+            }, 
+            "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
+            "type": "Microsoft.Network/publicIPAddresses"
+        },
+        {   
+            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
+            "apiVersion": "[variables('networkApiVersion')]", 
+            "location": "[variables('location')]", 
             "name": "[variables('mgmtPublicIPAddressName')]", 
             "properties": {
                 "dnsSettings": {
@@ -507,7 +536,22 @@
             }, 
             "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
             "type": "Microsoft.Network/networkSecurityGroups"
-        },  
+        },
+        {
+            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
+            "apiVersion": "[variables('computeApiVersion')]", 
+            "location": "[variables('location')]", 
+            "name": "[variables('availabilitySetName')]", 
+            "properties": {
+                "PlatformFaultDomainCount": 2, 
+                "PlatformUpdateDomainCount": 2
+            }, 
+            "sku": {
+                "name": "Aligned"
+            }, 
+            "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
+            "type": "Microsoft.Compute/availabilitySets"
+        },   
         {
             "apiVersion": "[variables('storageApiVersion')]", 
             "kind": "Storage", 
@@ -542,6 +586,7 @@
             "type": "Microsoft.Compute/images"
         }, 
         {
+            "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('computeApiVersion')]", 
             "dependsOn": [
                 "[concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName'))]",  
@@ -550,7 +595,7 @@
             ], 
             "location": "[variables('location')]", 
             "zones": ["[variables('availabilityZoneName')]"],
-            "name": "[variables('instanceName')]", 
+            "name": "[concat(variables('instanceName'), '-az', variables('availabilityZoneName'))]", 
             "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
             "properties": { 
                 "diagnosticsProfile": {
@@ -583,6 +628,52 @@
             "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
             "type": "Microsoft.Compute/virtualMachines"
         }, 
+        {
+            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
+            "apiVersion": "[variables('computeApiVersion')]", 
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName'))]",  
+                "[concat('Microsoft.Compute/availabilitySets/', variables('availabilitySetName'))]",
+                "[variables('newCustomImageName')]", 
+                "[concat('Microsoft.Network/networkInterfaces/', variables('mgmtNicName'))]"
+            ], 
+            "location": "[variables('location')]", 
+            "name": "[variables('instanceName')]", 
+            "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
+            "properties": { 
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('availabilitySetName'))]"
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true, 
+                        "storageUri": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).primaryEndpoints.blob]"
+                    }
+                }, 
+                "hardwareProfile": {
+                    "vmSize": "[parameters('instanceType')]"
+                }, 
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('mgmtNicName'))]", 
+                            "properties": {
+                                "primary": true
+                            }
+                        }
+                    ]
+                }, 
+                "osProfile": {
+                    "adminPassword": "[variables('adminPasswordOrKey')]", 
+                    "adminUsername": "[parameters('adminUsername')]", 
+                    "computerName": "[variables('instanceName')]", 
+                    "linuxConfiguration": "[if(equals(parameters('authenticationType'), 'password'), json('null'), variables('linuxConfiguration'))]"
+                }, 
+                "storageProfile": "[if(variables('useCustomImage'), variables('storageProfileArray').customImage, variables('storageProfileArray').platformImage)]"
+            }, 
+            "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
+            "type": "Microsoft.Compute/virtualMachines"
+        },
         {
             "apiVersion": "[variables('computeApiVersion')]", 
             "dependsOn": [
