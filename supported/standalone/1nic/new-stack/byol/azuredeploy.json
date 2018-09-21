@@ -1,6 +1,6 @@
 {
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json", 
-    "contentVersion": "5.3.2.0", 
+    "contentVersion": "5.3.2.1", 
     "parameters": {
         "adminUsername": {
             "defaultValue": "azureuser", 
@@ -26,6 +26,29 @@
             }, 
             "type": "securestring"
         }, 
+        "availabilityZoneRegion": {
+           "type": "string",
+           "allowedValues": [
+               "westeurope",
+               "eastus2"
+           ],
+           "defaultValue": "[resourceGroup().location]",
+           "metadata": {
+                "description": "Region where the VM is located. Only certain regions support Availability Zones during preview."
+            }
+        },
+        "availabilityZone": {
+            "type": "string",
+            "allowedValues": [
+                "1",
+                "2",
+                "3"
+            ],
+            "defaultValue": "1",
+            "metadata": {
+                "description": "Availability Zone number"
+            }
+        },
         "dnsLabel": {
             "defaultValue": "", 
             "metadata": {
@@ -258,9 +281,9 @@
                 "Port": 8443
             }
         }, 
-        "computeApiVersion": "2017-12-01", 
-        "networkApiVersion": "2017-11-01", 
-        "storageApiVersion": "2017-10-01", 
+        "computeApiVersion": "2018-04-01", 
+        "networkApiVersion": "2018-04-01", 
+        "storageApiVersion": "2018-07-01", 
         "location": "[resourceGroup().location]", 
         "adminPasswordOrKey": "[replace(parameters('adminPasswordOrKey'),'\\n', '\n')]", 
         "linuxConfiguration": {
@@ -301,7 +324,7 @@
         "bigIpNicPortValue": "[variables('bigIpNicPortMap')['1'].Port]", 
         "bigIpMgmtPort": "[variables('bigIpVersionPortMap')[variables('bigIpNicPortValue')].Port]", 
         "instanceName": "[toLower(parameters('instanceName'))]", 
-        "availabilitySetName": "[concat(variables('dnsLabel'), '-avset')]", 
+        "availabilityZoneName": "[parameters('availabilityZone')]",
         "virtualNetworkName": "[concat(variables('dnsLabel'), '-vnet')]", 
         "vnetId": "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]", 
         "vnetAddressPrefix": "[concat(parameters('vnetAddressPrefix'),'.0.0/16')]", 
@@ -377,9 +400,10 @@
         "installCustomConfig": "[concat(variables('singleQuote'), '#!/bin/bash\n', variables('customConfig'), variables('singleQuote'))]"
     }, 
     "resources": [
-        {
+        {   
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]", 
+            "zones": ["[variables('availabilityZoneName')]"],
             "name": "[variables('mgmtPublicIPAddressName')]", 
             "properties": {
                 "dnsSettings": {
@@ -483,21 +507,7 @@
             }, 
             "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
             "type": "Microsoft.Network/networkSecurityGroups"
-        }, 
-        {
-            "apiVersion": "[variables('computeApiVersion')]", 
-            "location": "[variables('location')]", 
-            "name": "[variables('availabilitySetName')]", 
-            "properties": {
-                "PlatformFaultDomainCount": 2, 
-                "PlatformUpdateDomainCount": 2
-            }, 
-            "sku": {
-                "name": "Aligned"
-            }, 
-            "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
-            "type": "Microsoft.Compute/availabilitySets"
-        }, 
+        },  
         {
             "apiVersion": "[variables('storageApiVersion')]", 
             "kind": "Storage", 
@@ -534,18 +544,15 @@
         {
             "apiVersion": "[variables('computeApiVersion')]", 
             "dependsOn": [
-                "[concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName'))]", 
-                "[concat('Microsoft.Compute/availabilitySets/', variables('availabilitySetName'))]", 
+                "[concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName'))]",  
                 "[variables('newCustomImageName')]", 
                 "[concat('Microsoft.Network/networkInterfaces/', variables('mgmtNicName'))]"
             ], 
             "location": "[variables('location')]", 
+            "zones": ["[variables('availabilityZoneName')]"],
             "name": "[variables('instanceName')]", 
             "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
-            "properties": {
-                "availabilitySet": {
-                    "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('availabilitySetName'))]"
-                }, 
+            "properties": { 
                 "diagnosticsProfile": {
                     "bootDiagnostics": {
                         "enabled": true, 
