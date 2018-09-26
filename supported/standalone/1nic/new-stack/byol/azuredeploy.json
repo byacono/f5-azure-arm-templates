@@ -294,7 +294,7 @@
             }
         }, 
         "computeApiVersion": "2018-04-01", 
-        "networkApiVersion": "2017-11-01", 
+        "networkApiVersion": "2018-08-01", 
         "storageApiVersion": "2018-07-01", 
         "location": "[resourceGroup().location]", 
         "adminPasswordOrKey": "[replace(parameters('adminPasswordOrKey'),'\\n', '\n')]", 
@@ -344,7 +344,8 @@
         "vnetAddressPrefix": "[concat(parameters('vnetAddressPrefix'),'.0.0/16')]", 
         "publicIPAddressType": "Static", 
         "mgmtPublicIPAddressName": "[concat(variables('dnsLabel'), '-mgmt-pip')]", 
-        "mgmtPublicIPAddressId": "[resourceId('Microsoft.Network/publicIPAddresses', variables('mgmtPublicIPAddressName'))]", 
+        "mgmtPublicIPAddressNameAvZone": "[concat(variables('dnsLabel'), '-mgmt-pip', '-az', variables('availabilityZoneName'))]",
+        "mgmtPublicIPAddressId": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), resourceId('Microsoft.Network/publicIPAddresses', variables('mgmtPublicIPAddressName')), resourceId('Microsoft.Network/publicIPAddresses', variables('mgmtPublicIPAddressNameAvZone')))]",  
         "mgmtNsgID": "[resourceId('Microsoft.Network/networkSecurityGroups/',concat(variables('dnsLabel'),'-mgmt-nsg'))]", 
         "mgmtNicName": "[concat(variables('dnsLabel'), '-mgmt')]", 
         "mgmtNicID": "[resourceId('Microsoft.Network/NetworkInterfaces', variables('mgmtNicName'))]", 
@@ -416,7 +417,7 @@
     "resources": [
         {
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
-            "apiVersion": "2018-08-01", 
+            "apiVersion": "[variables('networkApiVersion')]",
             "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]",
             "zones": ["[variables('availabilityZoneName')]"],
             "name": "[concat(variables('mgmtPublicIPAddressName'),'-az',variables('availabilityZoneName'))]", 
@@ -432,7 +433,7 @@
         },
         {   
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
-            "apiVersion": "2018-08-01", 
+            "apiVersion": "[variables('networkApiVersion')]",
             "location": "[variables('location')]",
             "name": "[variables('mgmtPublicIPAddressName')]", 
             "properties": {
@@ -679,7 +680,7 @@
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('computeApiVersion')]", 
             "dependsOn": [
-                "[concat('Microsoft.Compute/virtualMachines/', variables('instanceName'))]"
+                "[concat('Microsoft.Compute/virtualMachines/', variables('instanceName'),'-az',variables('availabilityZoneName'))]"
             ], 
             "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
             "name": "[concat(variables('instanceName'),'-az',variables('availabilityZoneName'),'/start')]", 
@@ -731,11 +732,11 @@
     "outputs": {
         "GUI-URL": {
             "type": "string", 
-            "value": "[concat('https://', reference(variables('mgmtPublicIPAddressId'), '2018-08-01').dnsSettings.fqdn, ':', variables('bigIpMgmtPort'))]"
+            "value": "[concat('https://', reference(variables('mgmtPublicIPAddressId'), variables('networkApiVersion')).dnsSettings.fqdn, ':', variables('bigIpMgmtPort'))]"
         }, 
         "SSH-URL": {
             "type": "string", 
-            "value": "[concat(reference(variables('mgmtPublicIPAddressId'), '2018-08-01').dnsSettings.fqdn, ' ',22)]"
+            "value": "[concat(reference(variables('mgmtPublicIPAddressId'), variables('networkApiVersion')).dnsSettings.fqdn, ' ',22)]"
         }
     }
 }
