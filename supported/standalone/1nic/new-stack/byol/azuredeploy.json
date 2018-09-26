@@ -32,7 +32,7 @@
                 "Availability Zone",
                 "Availability Set"
             ],
-            "defaultValue": "Availability Zone",
+            "defaultValue": "Availability Set",
             "metadata": {
                 "description": "Choose your Availability options"
             }
@@ -42,6 +42,7 @@
            "type": "string",
            "allowedValues": [
                "westeurope",
+               "francecentral",
                "eastus2"
            ],
            "defaultValue": "[resourceGroup().location]",
@@ -56,7 +57,6 @@
                 "2",
                 "3"
             ],
-            "defaultValue": "1",
             "metadata": {
                 "description": "Availability Zone number. Not relevant if you selected Availability Set option above"
             }
@@ -338,6 +338,7 @@
         "instanceName": "[toLower(parameters('instanceName'))]",
         "availabilitySetName": "[concat(variables('dnsLabel'), '-avset')]", 
         "availabilityZoneName": "[parameters('availabilityZone')]",
+        "availabilityZoneRegion": "[parameters('availabilityZoneRegion')]",
         "virtualNetworkName": "[concat(variables('dnsLabel'), '-vnet')]", 
         "vnetId": "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]", 
         "vnetAddressPrefix": "[concat(parameters('vnetAddressPrefix'),'.0.0/16')]", 
@@ -413,15 +414,15 @@
         "installCustomConfig": "[concat(variables('singleQuote'), '#!/bin/bash\n', variables('customConfig'), variables('singleQuote'))]"
     }, 
     "resources": [
-        {   
+        {
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
-            "apiVersion": "[variables('networkApiVersion')]", 
-            "location": "[variables('location')]", 
+            "apiVersion": "2018-08-01", 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]",
             "zones": ["[variables('availabilityZoneName')]"],
-            "name": "[concat(variables('mgmtPublicIPAddressName'), '-az', variables('availabilityZoneName'))]", 
+            "name": "[concat(variables('mgmtPublicIPAddressName'),'-az',variables('availabilityZoneName'))]", 
             "properties": {
                 "dnsSettings": {
-                    "domainNameLabel": "[variables('dnsLabel')]"
+                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneName'))]"
                 }, 
                 "idleTimeoutInMinutes": 30, 
                 "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
@@ -431,22 +432,22 @@
         },
         {   
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
-            "apiVersion": "[variables('networkApiVersion')]", 
-            "location": "[variables('location')]", 
+            "apiVersion": "2018-08-01", 
+            "location": "[variables('location')]",
             "name": "[variables('mgmtPublicIPAddressName')]", 
             "properties": {
                 "dnsSettings": {
-                    "domainNameLabel": "[variables('dnsLabel')]"
+                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneName'))]"
                 }, 
                 "idleTimeoutInMinutes": 30, 
                 "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
             }, 
             "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
             "type": "Microsoft.Network/publicIPAddresses"
-        }, 
+        },
         {
             "apiVersion": "[variables('networkApiVersion')]", 
-            "location": "[variables('location')]", 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
             "name": "[variables('virtualNetworkName')]", 
             "properties": {
                 "addressSpace": {
@@ -473,7 +474,7 @@
                 "[variables('mgmtPublicIPAddressId')]", 
                 "[variables('mgmtNsgID')]"
             ], 
-            "location": "[variables('location')]", 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
             "name": "[variables('mgmtNicName')]", 
             "properties": {
                 "ipConfigurations": [
@@ -500,7 +501,7 @@
         }, 
         {
             "apiVersion": "[variables('networkApiVersion')]", 
-            "location": "[variables('location')]", 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
             "name": "[concat(variables('dnsLabel'), '-mgmt-nsg')]", 
             "properties": {
                 "securityRules": [
@@ -540,7 +541,7 @@
         {
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
             "apiVersion": "[variables('computeApiVersion')]", 
-            "location": "[variables('location')]", 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
             "name": "[variables('availabilitySetName')]", 
             "properties": {
                 "PlatformFaultDomainCount": 2, 
@@ -555,7 +556,7 @@
         {
             "apiVersion": "[variables('storageApiVersion')]", 
             "kind": "Storage", 
-            "location": "[variables('location')]", 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]",  
             "name": "[variables('newDataStorageAccountName')]", 
             "properties": {
                 "supportsHttpsTrafficOnly": true
@@ -570,7 +571,7 @@
         {
             "apiVersion": "[variables('computeApiVersion')]", 
             "condition": "[and(variables('useCustomImage'), variables('createNewCustomImage'))]", 
-            "location": "[variables('location')]", 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
             "name": "[variables('newCustomImageName')]", 
             "properties": {
                 "storageProfile": {
@@ -584,7 +585,7 @@
             }, 
             "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
             "type": "Microsoft.Compute/images"
-        }, 
+        },  
         {
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('computeApiVersion')]", 
@@ -593,60 +594,14 @@
                 "[variables('newCustomImageName')]", 
                 "[concat('Microsoft.Network/networkInterfaces/', variables('mgmtNicName'))]"
             ], 
-            "location": "[variables('location')]", 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]",
             "zones": ["[variables('availabilityZoneName')]"],
-            "name": "[concat(variables('instanceName'), '-az', variables('availabilityZoneName'))]", 
+            "name": "[concat(variables('instanceName'),'-az',variables('availabilityZoneName'))]", 
             "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
             "properties": { 
                 "diagnosticsProfile": {
                     "bootDiagnostics": {
-                        "enabled": true, 
-                        "storageUri": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).primaryEndpoints.blob]"
-                    }
-                }, 
-                "hardwareProfile": {
-                    "vmSize": "[parameters('instanceType')]"
-                }, 
-                "networkProfile": {
-                    "networkInterfaces": [
-                        {
-                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('mgmtNicName'))]", 
-                            "properties": {
-                                "primary": true
-                            }
-                        }
-                    ]
-                }, 
-                "osProfile": {
-                    "adminPassword": "[variables('adminPasswordOrKey')]", 
-                    "adminUsername": "[parameters('adminUsername')]", 
-                    "computerName": "[variables('instanceName')]", 
-                    "linuxConfiguration": "[if(equals(parameters('authenticationType'), 'password'), json('null'), variables('linuxConfiguration'))]"
-                }, 
-                "storageProfile": "[if(variables('useCustomImage'), variables('storageProfileArray').customImage, variables('storageProfileArray').platformImage)]"
-            }, 
-            "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
-            "type": "Microsoft.Compute/virtualMachines"
-        }, 
-        {
-            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
-            "apiVersion": "[variables('computeApiVersion')]", 
-            "dependsOn": [
-                "[concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName'))]",  
-                "[concat('Microsoft.Compute/availabilitySets/', variables('availabilitySetName'))]",
-                "[variables('newCustomImageName')]", 
-                "[concat('Microsoft.Network/networkInterfaces/', variables('mgmtNicName'))]"
-            ], 
-            "location": "[variables('location')]", 
-            "name": "[variables('instanceName')]", 
-            "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
-            "properties": { 
-                "availabilitySet": {
-                    "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('availabilitySetName'))]"
-                },
-                "diagnosticsProfile": {
-                    "bootDiagnostics": {
-                        "enabled": true, 
+                        "enabled": true,
                         "storageUri": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).primaryEndpoints.blob]"
                     }
                 }, 
@@ -675,11 +630,84 @@
             "type": "Microsoft.Compute/virtualMachines"
         },
         {
+            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
+            "apiVersion": "[variables('computeApiVersion')]", 
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName'))]",  
+                "[concat('Microsoft.Compute/availabilitySets/', variables('availabilitySetName'))]", 
+                "[variables('newCustomImageName')]", 
+                "[concat('Microsoft.Network/networkInterfaces/', variables('mgmtNicName'))]"
+            ], 
+            "location": "[variables('location')]",
+            "name": "[variables('instanceName')]", 
+            "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
+            "properties": {
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('availabilitySetName'))]"
+                }, 
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('newDataStorageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).primaryEndpoints.blob]"
+                    }
+                }, 
+                "hardwareProfile": {
+                    "vmSize": "[parameters('instanceType')]"
+                }, 
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('mgmtNicName'))]", 
+                            "properties": {
+                                "primary": true
+                            }
+                        }
+                    ]
+                }, 
+                "osProfile": {
+                    "adminPassword": "[variables('adminPasswordOrKey')]", 
+                    "adminUsername": "[parameters('adminUsername')]", 
+                    "computerName": "[variables('instanceName')]", 
+                    "linuxConfiguration": "[if(equals(parameters('authenticationType'), 'password'), json('null'), variables('linuxConfiguration'))]"
+                }, 
+                "storageProfile": "[if(variables('useCustomImage'), variables('storageProfileArray').customImage, variables('storageProfileArray').platformImage)]"
+            }, 
+            "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
+            "type": "Microsoft.Compute/virtualMachines"
+        },
+        {
+            "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('computeApiVersion')]", 
             "dependsOn": [
                 "[concat('Microsoft.Compute/virtualMachines/', variables('instanceName'))]"
             ], 
-            "location": "[variables('location')]", 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
+            "name": "[concat(variables('instanceName'),'-az',variables('availabilityZoneName'),'/start')]", 
+            "properties": {
+                "protectedSettings": {
+                    "commandToExecute": "[concat('function cp_logs() { cd /var/lib/waagent/custom-script/download && cp `ls -r | head -1`/std* /var/log/cloud/azure; cd /var/log/cloud/azure && cat stdout stderr > install.log; }; CLOUD_LIB_DIR=/config/cloud/azure/node_modules/@f5devcentral; mkdir -p $CLOUD_LIB_DIR && cp f5-cloud-libs.tar.gz* /config/cloud; mkdir -p /var/log/cloud/azure;/usr/bin/install -m 400 /dev/null /config/cloud/.passwd; /usr/bin/install -b -m 755 /dev/null /config/verifyHash; /usr/bin/install -b -m 755 /dev/null /config/installCloudLibs.sh; IFS=', variables('singleQuote'), '%', variables('singleQuote'), '; echo -e ', variables('verifyHash'), ' >> /config/verifyHash; echo -e ', variables('installCloudLibs'), ' >> /config/installCloudLibs.sh; echo -e ', variables('installCustomConfig'), ' >> /config/customConfig.sh; unset IFS; bash /config/installCloudLibs.sh; source $CLOUD_LIB_DIR/f5-cloud-libs/scripts/util.sh; encrypt_secret ', variables('singleQuote'), variables('adminPasswordOrKey'), variables('singleQuote'), ' \"/config/cloud/.passwd\" true; $CLOUD_LIB_DIR/f5-cloud-libs/scripts/createUser.sh --user svc_user --password-file /config/cloud/.passwd --password-encrypted;', variables('allowUsageAnalytics')[parameters('allowUsageAnalytics')].hashCmd, '; /usr/bin/f5-rest-node $CLOUD_LIB_DIR/f5-cloud-libs/scripts/onboard.js --output /var/log/cloud/azure/onboard.log --signal ONBOARD_DONE --log-level info --cloud azure --host ', variables('mgmtSubnetPrivateAddress'), ' --port ', variables('bigIpMgmtPort'), ' -u svc_user --password-url file:///config/cloud/.passwd --password-encrypted --hostname ', concat(variables('instanceName'), '.', variables('location'), '.cloudapp.azure.com'), ' --license ', parameters('licenseKey1'), ' --ntp ', parameters('ntpServer'), ' --tz ', parameters('timeZone'), ' --db tmm.maxremoteloglength:2048', variables('allowUsageAnalytics')[parameters('allowUsageAnalytics')].metricsCmd, ' --module ltm:nominal', '; if [[ $? == 0 ]]; then tmsh load sys application template f5.service_discovery.tmpl; tmsh load sys application template f5.cloud_logger.v1.0.0.tmpl; bash /config/customConfig.sh; $(cp_logs); else $(cp_logs); exit 1; fi', '; if grep -i \"PUT failed\" /var/log/waagent.log -q; then echo \"Killing waagent exthandler, daemon should restart it\"; pkill -f \"python -u /usr/sbin/waagent -run-exthandlers\"; fi')]"
+                }, 
+                "publisher": "Microsoft.Azure.Extensions", 
+                "settings": {
+                    "fileUris": [
+                        "[concat('https://raw.githubusercontent.com/F5Networks/f5-cloud-libs/', variables('f5CloudLibsTag'), '/dist/f5-cloud-libs.tar.gz')]", 
+                        "[concat('https://raw.githubusercontent.com/F5Networks/f5-cloud-iapps/', variables('f5CloudIappsTag'), '/f5-service-discovery/f5.service_discovery.tmpl')]", 
+                        "[concat('https://raw.githubusercontent.com/F5Networks/f5-cloud-iapps/', variables('f5CloudIappsTag'), '/f5-cloud-logger/f5.cloud_logger.v1.0.0.tmpl')]"
+                    ]
+                }, 
+                "type": "CustomScript", 
+                "typeHandlerVersion": "2.0"
+            }, 
+            "tags": "[if(empty(variables('tagValues')), json('null'), variables('tagValues'))]", 
+            "type": "Microsoft.Compute/virtualMachines/extensions"
+        },
+        {
+            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
+            "apiVersion": "[variables('computeApiVersion')]", 
+            "dependsOn": [
+                "[concat('Microsoft.Compute/virtualMachines/', variables('instanceName'))]"
+            ], 
+            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
             "name": "[concat(variables('instanceName'),'/start')]", 
             "properties": {
                 "protectedSettings": {
@@ -703,11 +731,11 @@
     "outputs": {
         "GUI-URL": {
             "type": "string", 
-            "value": "[concat('https://', reference(variables('mgmtPublicIPAddressId')).dnsSettings.fqdn, ':', variables('bigIpMgmtPort'))]"
+            "value": "[concat('https://', reference(variables('mgmtPublicIPAddressId'), '2018-08-01').dnsSettings.fqdn, ':', variables('bigIpMgmtPort'))]"
         }, 
         "SSH-URL": {
             "type": "string", 
-            "value": "[concat(reference(variables('mgmtPublicIPAddressId')).dnsSettings.fqdn, ' ',22)]"
+            "value": "[concat(reference(variables('mgmtPublicIPAddressId'), '2018-08-01').dnsSettings.fqdn, ' ',22)]"
         }
     }
 }
