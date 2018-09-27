@@ -43,7 +43,12 @@
            "allowedValues": [
                "westeurope",
                "francecentral",
-               "eastus2"
+               "eastus2",
+               "westus2",
+               "centralus",
+               "northeurope",
+               "southeastasia"
+
            ],
            "defaultValue": "[resourceGroup().location]",
            "metadata": {
@@ -53,10 +58,12 @@
         "availabilityZone": {
             "type": "string",
             "allowedValues": [
+                "",
                 "1",
                 "2",
                 "3"
             ],
+            "defaultValue": "", 
             "metadata": {
                 "description": "Availability Zone number. Not relevant if you selected Availability Set option above"
             }
@@ -296,7 +303,7 @@
         "computeApiVersion": "2018-04-01", 
         "networkApiVersion": "2018-08-01", 
         "storageApiVersion": "2018-07-01", 
-        "location": "[resourceGroup().location]", 
+        "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), resourceGroup().location)]",
         "adminPasswordOrKey": "[replace(parameters('adminPasswordOrKey'),'\\n', '\n')]", 
         "linuxConfiguration": {
             "disablePasswordAuthentication": true, 
@@ -418,7 +425,7 @@
         {
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('networkApiVersion')]",
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]",
+            "location": "[variables('location')]",
             "zones": ["[variables('availabilityZoneName')]"],
             "name": "[concat(variables('mgmtPublicIPAddressName'),'-az',variables('availabilityZoneName'))]", 
             "properties": {
@@ -448,7 +455,7 @@
         },
         {
             "apiVersion": "[variables('networkApiVersion')]", 
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
+            "location": "[variables('location')]",
             "name": "[variables('virtualNetworkName')]", 
             "properties": {
                 "addressSpace": {
@@ -475,7 +482,7 @@
                 "[variables('mgmtPublicIPAddressId')]", 
                 "[variables('mgmtNsgID')]"
             ], 
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
+            "location": "[variables('location')]",
             "name": "[variables('mgmtNicName')]", 
             "properties": {
                 "ipConfigurations": [
@@ -502,8 +509,8 @@
         }, 
         {
             "apiVersion": "[variables('networkApiVersion')]", 
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
-            "name": "[concat(variables('dnsLabel'), '-mgmt-nsg')]", 
+            "location": "[variables('location')]",
+             "name": "[concat(variables('dnsLabel'), '-mgmt-nsg')]", 
             "properties": {
                 "securityRules": [
                     {
@@ -542,7 +549,7 @@
         {
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
             "apiVersion": "[variables('computeApiVersion')]", 
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
+            "location": "[variables('location')]",
             "name": "[variables('availabilitySetName')]", 
             "properties": {
                 "PlatformFaultDomainCount": 2, 
@@ -557,7 +564,7 @@
         {
             "apiVersion": "[variables('storageApiVersion')]", 
             "kind": "Storage", 
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]",  
+            "location": "[variables('location')]",  
             "name": "[variables('newDataStorageAccountName')]", 
             "properties": {
                 "supportsHttpsTrafficOnly": true
@@ -572,7 +579,7 @@
         {
             "apiVersion": "[variables('computeApiVersion')]", 
             "condition": "[and(variables('useCustomImage'), variables('createNewCustomImage'))]", 
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
+            "location": "[variables('location')]",
             "name": "[variables('newCustomImageName')]", 
             "properties": {
                 "storageProfile": {
@@ -595,7 +602,7 @@
                 "[variables('newCustomImageName')]", 
                 "[concat('Microsoft.Network/networkInterfaces/', variables('mgmtNicName'))]"
             ], 
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]",
+            "location": "[variables('location')]",
             "zones": ["[variables('availabilityZoneName')]"],
             "name": "[concat(variables('instanceName'),'-az',variables('availabilityZoneName'))]", 
             "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
@@ -682,7 +689,7 @@
             "dependsOn": [
                 "[concat('Microsoft.Compute/virtualMachines/', variables('instanceName'),'-az',variables('availabilityZoneName'))]"
             ], 
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
+            "location": "[variables('location')]",
             "name": "[concat(variables('instanceName'),'-az',variables('availabilityZoneName'),'/start')]", 
             "properties": {
                 "protectedSettings": {
@@ -708,7 +715,7 @@
             "dependsOn": [
                 "[concat('Microsoft.Compute/virtualMachines/', variables('instanceName'))]"
             ], 
-            "location": "[if(equals(parameters('availabilityOptions'), 'Availability Zone'), variables('availabilityZoneRegion'), variables('location'))]", 
+            "location": "[variables('location')]",
             "name": "[concat(variables('instanceName'),'/start')]", 
             "properties": {
                 "protectedSettings": {
