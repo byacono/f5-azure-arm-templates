@@ -344,14 +344,14 @@
         "bigIpMgmtPort": "[variables('bigIpVersionPortMap')[variables('bigIpNicPortValue')].Port]", 
         "instanceName": "[toLower(parameters('instanceName'))]",
         "availabilitySetName": "[concat(variables('dnsLabel'), '-avset')]", 
-        "availabilityZoneName": "[parameters('availabilityZone')]",
+        "availabilityZoneNumber": "[parameters('availabilityZone')]",
         "availabilityZoneRegion": "[parameters('availabilityZoneRegion')]",
         "virtualNetworkName": "[concat(variables('dnsLabel'), '-vnet')]", 
         "vnetId": "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]", 
         "vnetAddressPrefix": "[concat(parameters('vnetAddressPrefix'),'.0.0/16')]", 
         "publicIPAddressType": "Static", 
         "mgmtPublicIPAddressName": "[concat(variables('dnsLabel'), '-mgmt-pip')]", 
-        "mgmtPublicIPAddressNameAvZone": "[concat(variables('dnsLabel'), '-mgmt-pip', '-az', variables('availabilityZoneName'))]",
+        "mgmtPublicIPAddressNameAvZone": "[concat(variables('dnsLabel'), '-mgmt-pip', '-az', variables('availabilityZoneNumber'))]",
         "mgmtPublicIPAddressId": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), resourceId('Microsoft.Network/publicIPAddresses', variables('mgmtPublicIPAddressName')), resourceId('Microsoft.Network/publicIPAddresses', variables('mgmtPublicIPAddressNameAvZone')))]",  
         "mgmtNsgID": "[resourceId('Microsoft.Network/networkSecurityGroups/',concat(variables('dnsLabel'),'-mgmt-nsg'))]", 
         "mgmtNicName": "[concat(variables('dnsLabel'), '-mgmt')]", 
@@ -426,11 +426,11 @@
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('networkApiVersion')]",
             "location": "[variables('location')]",
-            "zones": ["[variables('availabilityZoneName')]"],
-            "name": "[concat(variables('mgmtPublicIPAddressName'),'-az',variables('availabilityZoneName'))]", 
+            "zones": ["[variables('availabilityZoneNumber')]"],
+            "name": "[concat(variables('mgmtPublicIPAddressName'),'-az',variables('availabilityZoneNumber'))]", 
             "properties": {
                 "dnsSettings": {
-                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneName'))]"
+                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneNumber'))]"
                 }, 
                 "idleTimeoutInMinutes": 30, 
                 "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
@@ -445,7 +445,7 @@
             "name": "[variables('mgmtPublicIPAddressName')]", 
             "properties": {
                 "dnsSettings": {
-                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneName'))]"
+                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneNumber'))]"
                 }, 
                 "idleTimeoutInMinutes": 30, 
                 "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
@@ -603,8 +603,8 @@
                 "[concat('Microsoft.Network/networkInterfaces/', variables('mgmtNicName'))]"
             ], 
             "location": "[variables('location')]",
-            "zones": ["[variables('availabilityZoneName')]"],
-            "name": "[concat(variables('instanceName'),'-az',variables('availabilityZoneName'))]", 
+            "zones": ["[variables('availabilityZoneNumber')]"],
+            "name": "[concat(variables('instanceName'),'-az',variables('availabilityZoneNumber'))]", 
             "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
             "properties": { 
                 "diagnosticsProfile": {
@@ -687,10 +687,10 @@
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('computeApiVersion')]", 
             "dependsOn": [
-                "[concat('Microsoft.Compute/virtualMachines/', variables('instanceName'),'-az',variables('availabilityZoneName'))]"
+                "[concat('Microsoft.Compute/virtualMachines/', variables('instanceName'),'-az',variables('availabilityZoneNumber'))]"
             ], 
             "location": "[variables('location')]",
-            "name": "[concat(variables('instanceName'),'-az',variables('availabilityZoneName'),'/start')]", 
+            "name": "[concat(variables('instanceName'),'-az',variables('availabilityZoneNumber'),'/start')]", 
             "properties": {
                 "protectedSettings": {
                     "commandToExecute": "[concat('function cp_logs() { cd /var/lib/waagent/custom-script/download && cp `ls -r | head -1`/std* /var/log/cloud/azure; cd /var/log/cloud/azure && cat stdout stderr > install.log; }; CLOUD_LIB_DIR=/config/cloud/azure/node_modules/@f5devcentral; mkdir -p $CLOUD_LIB_DIR && cp f5-cloud-libs.tar.gz* /config/cloud; mkdir -p /var/log/cloud/azure;/usr/bin/install -m 400 /dev/null /config/cloud/.passwd; /usr/bin/install -b -m 755 /dev/null /config/verifyHash; /usr/bin/install -b -m 755 /dev/null /config/installCloudLibs.sh; IFS=', variables('singleQuote'), '%', variables('singleQuote'), '; echo -e ', variables('verifyHash'), ' >> /config/verifyHash; echo -e ', variables('installCloudLibs'), ' >> /config/installCloudLibs.sh; echo -e ', variables('installCustomConfig'), ' >> /config/customConfig.sh; unset IFS; bash /config/installCloudLibs.sh; source $CLOUD_LIB_DIR/f5-cloud-libs/scripts/util.sh; encrypt_secret ', variables('singleQuote'), variables('adminPasswordOrKey'), variables('singleQuote'), ' \"/config/cloud/.passwd\" true; $CLOUD_LIB_DIR/f5-cloud-libs/scripts/createUser.sh --user svc_user --password-file /config/cloud/.passwd --password-encrypted;', variables('allowUsageAnalytics')[parameters('allowUsageAnalytics')].hashCmd, '; /usr/bin/f5-rest-node $CLOUD_LIB_DIR/f5-cloud-libs/scripts/onboard.js --output /var/log/cloud/azure/onboard.log --signal ONBOARD_DONE --log-level info --cloud azure --host ', variables('mgmtSubnetPrivateAddress'), ' --port ', variables('bigIpMgmtPort'), ' -u svc_user --password-url file:///config/cloud/.passwd --password-encrypted --hostname ', concat(variables('instanceName'), '.', variables('location'), '.cloudapp.azure.com'), ' --license ', parameters('licenseKey1'), ' --ntp ', parameters('ntpServer'), ' --tz ', parameters('timeZone'), ' --db tmm.maxremoteloglength:2048', variables('allowUsageAnalytics')[parameters('allowUsageAnalytics')].metricsCmd, ' --module ltm:nominal', '; if [[ $? == 0 ]]; then tmsh load sys application template f5.service_discovery.tmpl; tmsh load sys application template f5.cloud_logger.v1.0.0.tmpl; bash /config/customConfig.sh; $(cp_logs); else $(cp_logs); exit 1; fi', '; if grep -i \"PUT failed\" /var/log/waagent.log -q; then echo \"Killing waagent exthandler, daemon should restart it\"; pkill -f \"python -u /usr/sbin/waagent -run-exthandlers\"; fi')]"
