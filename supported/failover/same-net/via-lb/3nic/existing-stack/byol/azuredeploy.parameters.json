@@ -11,6 +11,21 @@
         "adminPasswordOrKey": {
             "value": ""
         }, 
+        "availabilityOptions": {
+            "value": ""
+        },
+        "availabilityZoneRegion": {
+            "value": ""
+        },
+        "availabilityZoneForBigIpMember1": {
+            "value": ""
+        },
+        "availabilityZoneForBigIpMember2": {
+            "value": ""
+        },
+        "availabilityZoneForPublicIpAddresses": {
+            "value": ""
+        },
         "dnsLabel": {
             "value": ""
         }, 

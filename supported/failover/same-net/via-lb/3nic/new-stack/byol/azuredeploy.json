@@ -34,7 +34,7 @@
             ],
             "defaultValue": "Availability Set",
             "metadata": {
-                "description": "Choose your Availability options. If you select Availability Zone Option then a Standard Azure Load Balancer will be used instead of basic"
+                "description": "Choose your Availability option. If you select Availability Zone Option, a Standard Azure Load Balancer will be used instead of Basic."
             }
 
         },
@@ -52,10 +52,10 @@
            ],
            "defaultValue": "[resourceGroup().location]",
            "metadata": {
-                "description": "Region where the VM is located. Only certain regions support Availability Zones during preview. Make Sure your region support Availability Zones. Not relevant if you selected Availability Set option above"
+                "description": "Region where the VM is located. Only some regions support Availability Zones during preview. Make Sure region you select here supports Availability Zones feature. This setting takes precedence over Region location above. This setting is not relevant if you selected Availability Set option above."
             }
         },
-        "availabilityZone": {
+        "availabilityZoneForBigIpMember1": {
             "type": "string",
             "allowedValues": [
                 "",
@@ -65,9 +65,35 @@
             ],
             "defaultValue": "",
             "metadata": {
-                "description": "Availability Zone number. Not relevant if you selected Availability Set option above."
+                "description": "Availability Zone number for F5 Big-IP Member 1. Big-IP members should be placed in different zones. This setting is not relevant if you selected Availability Set option above."
             }
         },
+        "availabilityZoneForBigIpMember2": {
+            "type": "string",
+            "allowedValues": [
+                "",
+                "1",
+                "2",
+                "3"
+            ],
+            "defaultValue": "",
+            "metadata": {
+                "description": "Availability Zone number for F5 Big-IP Member 2. Big-IP members should be placed in different zones. This setting is not relevant if you selected Availability Set option above."
+            }
+        },
+        "availabilityZoneForPublicIpAddresses": {
+            "type": "string",
+            "allowedValues": [
+                "ZoneRedundant",
+                "1",
+                "2",
+                "3"
+            ],
+            "defaultValue": "",
+            "metadata": {
+                "description": "Availability Zone number for Azure Public IP Addresses objects that are used by Azure Load Balancer. Default is Zone-redundant (recommended). This setting is not relevant if you selected Availability Set option above."
+            }
+        },        
         "dnsLabel": {
             "defaultValue": "", 
             "metadata": {
@@ -402,7 +428,9 @@
         "bigIpMgmtPort": "[variables('bigIpVersionPortMap')[variables('bigIpNicPortValue')].Port]", 
         "instanceName": "[toLower(parameters('instanceName'))]", 
         "availabilitySetName": "[concat(variables('dnsLabel'), '-avset')]", 
-        "availabilityZoneNumber": "[parameters('availabilityZone')]",
+        "availabilityZoneNumberForBigIpMember1": "[parameters('availabilityZoneForBigIpMember1')]",
+        "availabilityZoneNumberForBigIpMember2": "[parameters('availabilityZoneForBigIpMember2')]",
+        "availabilityZoneNumberForPublicIpAddresses": "[tolower(parameters('availabilityZoneForPublicIpAddresses'))]",
         "availabilityZoneRegion": "[parameters('availabilityZoneRegion')]",
         "virtualNetworkName": "[concat(variables('dnsLabel'), '-vnet')]", 
         "vnetId": "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]", 
@@ -421,7 +449,7 @@
         "extSelfPublicIpAddressNamePrefix": "[concat(variables('dnsLabel'), '-self-pip')]", 
         "extSelfPublicIpAddressIdPrefix": "[resourceId('Microsoft.Network/publicIPAddresses', variables('extSelfPublicIpAddressNamePrefix'))]", 
         "extpublicIPAddressNamePrefix": "[concat(variables('dnsLabel'), '-ext-pip')]", 
-        "extPublicIPAddressIdPrefix": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), resourceId('Microsoft.Network/publicIPAddresses', variables('extPublicIPAddressNamePrefix')), resourceId('Microsoft.Network/publicIPAddresses', concat(variables('extPublicIPAddressNamePrefix'), '-az',variables('availabilityZoneNumber'))))]", 
+        "extPublicIPAddressIdPrefix": "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), resourceId('Microsoft.Network/publicIPAddresses', variables('extPublicIPAddressNamePrefix')), resourceId('Microsoft.Network/publicIPAddresses', concat(variables('extPublicIPAddressNamePrefix'), '-az',variables('availabilityZoneNumberForPublicIpAddresses'))))]", 
         "extNsgID": "[resourceId('Microsoft.Network/networkSecurityGroups/',concat(variables('dnsLabel'),'-ext-nsg'))]", 
         "extNicName": "[concat(variables('dnsLabel'), '-ext')]", 
         "extSubnetName": "external", 
@@ -449,10 +477,10 @@
         }, 
         "backEndAddressPoolArray": [
             {
-                "id": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat(variables('extLbId'), '/backendAddressPools/', 'loadBalancerBackEnd'), concat(variables('extLbId'), '-az', variables('availabilityZoneNumber'), '/backendAddressPools/', 'loadBalancerBackEnd'))]"
+                "id": "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat(variables('extLbId'), '/backendAddressPools/', 'loadBalancerBackEnd'), concat(variables('extLbId'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '/backendAddressPools/', 'loadBalancerBackEnd'))]"
             }, 
             {
-                "id": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat(variables('intLbId'), '/backendAddressPools/', 'loadBalancerBackEnd'), concat(variables('intLbId'), '-az', variables('availabilityZoneNumber'), '/backendAddressPools/', 'loadBalancerBackEnd'))]"
+                "id": "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat(variables('intLbId'), '/backendAddressPools/', 'loadBalancerBackEnd'), concat(variables('intLbId'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '/backendAddressPools/', 'loadBalancerBackEnd'))]"
             } 
         ], 
         "failoverCmdArray": {
@@ -480,7 +508,7 @@
             }, 
             "Yes": {
                 "hashCmd": "[concat('custId=`echo \"', variables('subscriptionId'), '\"|sha512sum|cut -d \" \" -f 1`; deployId=`echo \"', variables('deploymentId'), '\"|sha512sum|cut -d \" \" -f 1`')]", 
-                "metricsCmd": "[concat(' --metrics customerId:${custId},deploymentId:${deployId},templateName:failover-lb_3nic-new-stack-supported,templateVersion:5.3.2.0,region:', variables('location'), ',bigIpVersion:', parameters('bigIpVersion') ,',licenseType:byol,cloudLibsVersion:', variables('f5CloudLibsTag'), ',cloudName:azure')]"
+                "metricsCmd": "[concat(' --metrics customerId:${custId},deploymentId:${deployId},templateName:failover-lb_3nic-new-stack-supported,templateVersion:5.3.2.1,region:', variables('location'), ',bigIpVersion:', parameters('bigIpVersion') ,',licenseType:byol,cloudLibsVersion:', variables('f5CloudLibsTag'), ',cloudName:azure')]"
             }
         }, 
         "customImage": "[replace(parameters('customImage'), 'OPTIONAL', '')]", 
@@ -531,17 +559,17 @@
     }, 
     "resources": [
         {
-            "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
+            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]",
-            "zones": ["[variables('availabilityZoneNumber')]"],
+            "zones": ["[variables('availabilityZoneNumberForPublicIpAddresses')]"],
             "sku": {
                 "name": "Standard"
             },
-            "name": "[concat(variables('mgmtPublicIPAddressName'), concat('-az',variables('availabilityZoneNumber')), 0)]",  
+            "name": "[concat(variables('mgmtPublicIPAddressName'), concat('-az',variables('availabilityZoneNumberForPublicIpAddresses')), 0)]",  
             "properties": {
                 "dnsSettings": {
-                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneNumber'), '-0')]"
+                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneNumberForPublicIpAddresses'), '-0')]"
                 }, 
                 "idleTimeoutInMinutes": 30, 
                 "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
@@ -550,11 +578,14 @@
             "type": "Microsoft.Network/publicIPAddresses"
         }, 
         {
-            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
+            "condition": "[or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]", 
+            "sku": {
+                "name": "[if(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'), 'Standard', 'Basic')]"
+            },
             "name": "[concat(variables('mgmtPublicIPAddressName'), 0)]", 
-            "properties": {
+             "properties": {
                 "dnsSettings": {
                     "domainNameLabel": "[concat(variables('dnsLabel'), '-0')]"
                 }, 
@@ -565,17 +596,17 @@
             "type": "Microsoft.Network/publicIPAddresses"
         }, 
         {
-            "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
+            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]",
-            "zones": ["[variables('availabilityZoneNumber')]"],
+            "zones": ["[variables('availabilityZoneNumberForPublicIpAddresses')]"],
             "sku": {
                 "name": "Standard"
             },
-            "name": "[concat(variables('mgmtPublicIPAddressName'), concat('-az',variables('availabilityZoneNumber')), 1)]", 
+            "name": "[concat(variables('mgmtPublicIPAddressName'), concat('-az',variables('availabilityZoneNumberForPublicIpAddresses')), 1)]", 
             "properties": {
                 "dnsSettings": {
-                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneNumber'), '-1')]"
+                    "domainNameLabel": "[concat(variables('dnsLabel'), variables('availabilityZoneNumberForPublicIpAddresses'), '-1')]"
                 }, 
                 "idleTimeoutInMinutes": 30, 
                 "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
@@ -584,9 +615,12 @@
             "type": "Microsoft.Network/publicIPAddresses"
         }, 
         {
-            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
+            "condition": "[or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]", 
+            "sku": {
+                "name": "[if(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'), 'Standard', 'Basic')]"
+            },
             "name": "[concat(variables('mgmtPublicIPAddressName'), 1)]", 
             "properties": {
                 "dnsSettings": {
@@ -599,14 +633,14 @@
             "type": "Microsoft.Network/publicIPAddresses"
         }, 
         {
-            "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
+            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]",
-            "zones": ["[variables('availabilityZoneNumber')]"], 
+            "zones": ["[variables('availabilityZoneNumberForPublicIpAddresses')]"], 
             "sku": {
                 "name": "Standard"
             },
-            "name": "[concat(variables('extSelfPublicIpAddressNamePrefix'),concat('-az',variables('availabilityZoneNumber')), '0')]", 
+            "name": "[concat(variables('extSelfPublicIpAddressNamePrefix'),concat('-az',variables('availabilityZoneNumberForPublicIpAddresses')), '0')]", 
             "properties": {
                 "idleTimeoutInMinutes": 30, 
                 "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
@@ -615,9 +649,11 @@
             "type": "Microsoft.Network/publicIPAddresses"
         },
         {
-            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
+            "condition": "[or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]", 
+            "sku": {
+                "name": "[if(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'), 'Standard', 'Basic')]"           },
             "name": "[concat(variables('extSelfPublicIpAddressNamePrefix'), '0')]", 
             "properties": {
                 "idleTimeoutInMinutes": 30, 
@@ -627,14 +663,14 @@
             "type": "Microsoft.Network/publicIPAddresses"
         }, 
         {
-            "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
+            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]",
-            "zones": ["[variables('availabilityZoneNumber')]"],
+            "zones": ["[variables('availabilityZoneNumberForPublicIpAddresses')]"],
             "sku": {
                 "name": "Standard"
             },
-            "name": "[concat(variables('extSelfPublicIpAddressNamePrefix'),concat('-az',variables('availabilityZoneNumber')), '1')]", 
+            "name": "[concat(variables('extSelfPublicIpAddressNamePrefix'),concat('-az',variables('availabilityZoneNumberForPublicIpAddresses')), '1')]", 
             "properties": {
                 "idleTimeoutInMinutes": 30, 
                 "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
@@ -643,9 +679,11 @@
             "type": "Microsoft.Network/publicIPAddresses"
         }, 
         { 
-            "condition": "[equals(parameters('availabilityOptions'), 'Availability Set')]",
+            "condition": "[or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "location": "[variables('location')]", 
+            "sku": {
+                "name": "[if(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'), 'Standard', 'Basic')]"            },
             "name": "[concat(variables('extSelfPublicIpAddressNamePrefix'), '1')]", 
             "properties": {
                 "idleTimeoutInMinutes": 30, 
@@ -655,21 +693,21 @@
             "type": "Microsoft.Network/publicIPAddresses"
         }, 
         {
-            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(variables('numberOfExternalIps'),0)))]",
+            "condition": "[and(and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'))), not(equals(variables('numberOfExternalIps'),0)))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "copy": {
                 "count": "[if(not(equals(variables('numberOfExternalIps'), 0)), variables('numberOfExternalIps'), 1)]", 
                 "name": "extpipcopy"
             }, 
             "location": "[variables('location')]",
-            "zones": ["[variables('availabilityZoneNumber')]"],
+            "zones": ["[variables('availabilityZoneNumberForPublicIpAddresses')]"],
             "sku": {
                 "name": "Standard"
             },
-            "name": "[concat(variables('extPublicIPAddressNamePrefix'), '-az',variables('availabilityZoneNumber'), copyIndex())]", 
+            "name": "[concat(variables('extPublicIPAddressNamePrefix'), '-az',variables('availabilityZoneNumberForPublicIpAddresses'), copyIndex())]", 
             "properties": {
                 "dnsSettings": {
-                    "domainNameLabel": "[concat(variables('dnsLabel'), '-az',variables('availabilityZoneNumber'), copyIndex(0))]"
+                    "domainNameLabel": "[concat(variables('dnsLabel'), '-az',variables('availabilityZoneNumberForPublicIpAddresses'), copyIndex(0))]"
                 }, 
                 "idleTimeoutInMinutes": 30, 
                 "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
@@ -678,13 +716,16 @@
             "type": "Microsoft.Network/publicIPAddresses"
         }, 
         {
-            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Set'), not(equals(variables('numberOfExternalIps'),0)))]",
+            "condition": "[and(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), not(equals(variables('numberOfExternalIps'),0)))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "copy": {
                 "count": "[if(not(equals(variables('numberOfExternalIps'), 0)), variables('numberOfExternalIps'), 1)]", 
                 "name": "extpipcopy"
             }, 
             "location": "[variables('location')]", 
+            "sku": {
+                "name": "[if(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'), 'Standard', 'Basic')]"          
+            },
             "name": "[concat(variables('extPublicIPAddressNamePrefix'), copyIndex())]", 
             "properties": {
                 "dnsSettings": {
@@ -735,7 +776,7 @@
             "dependsOn": [
                 "[variables('vnetId')]", 
                 "[variables('mgmtNsgID')]", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat('Microsoft.Network/publicIPAddresses/', variables('mgmtPublicIPAddressName'), '0'), concat('Microsoft.Network/publicIPAddresses/', variables('mgmtPublicIPAddressName'), concat('-az',variables('availabilityZoneNumber')), '0'))]"
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat('Microsoft.Network/publicIPAddresses/', variables('mgmtPublicIPAddressName'), '0'), concat('Microsoft.Network/publicIPAddresses/', variables('mgmtPublicIPAddressName'), concat('-az',variables('availabilityZoneNumberForPublicIpAddresses')), '0'))]"
             ], 
             "location": "[variables('location')]",
             "name": "[concat(variables('mgmtNicName'), '0')]", 
@@ -745,7 +786,7 @@
                         "name": "[concat(variables('dnsLabel'), '-mgmt-ipconfig')]", 
                         "properties": {
                             "PublicIpAddress": {
-                                "Id": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), resourceId('Microsoft.Network/publicIPAddresses/', concat(variables('mgmtPublicIPAddressName'), '0')), resourceId('Microsoft.Network/publicIPAddresses/', concat(variables('mgmtPublicIPAddressName'), '-az', variables('availabilityZoneNumber'), '0')))]"
+                                "Id": "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), resourceId('Microsoft.Network/publicIPAddresses/', concat(variables('mgmtPublicIPAddressName'), '0')), resourceId('Microsoft.Network/publicIPAddresses/', concat(variables('mgmtPublicIPAddressName'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '0')))]"
                             }, 
                             "privateIPAddress": "[variables('mgmtSubnetPrivateAddress')]", 
                             "privateIPAllocationMethod": "Static", 
@@ -767,7 +808,7 @@
             "dependsOn": [
                 "[variables('vnetId')]", 
                 "[variables('mgmtNsgID')]", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat('Microsoft.Network/publicIPAddresses/', variables('mgmtPublicIPAddressName'), '1'), concat('Microsoft.Network/publicIPAddresses/', variables('mgmtPublicIPAddressName'), '-az',variables('availabilityZoneNumber'), '1'))]"
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat('Microsoft.Network/publicIPAddresses/', variables('mgmtPublicIPAddressName'), '1'), concat('Microsoft.Network/publicIPAddresses/', variables('mgmtPublicIPAddressName'), '-az',variables('availabilityZoneNumberForPublicIpAddresses'), '1'))]"
             ], 
             "location": "[variables('location')]",
             "name": "[concat(variables('mgmtNicName'), '1')]", 
@@ -777,7 +818,7 @@
                         "name": "[concat(variables('dnsLabel'), '-mgmt-ipconfig')]", 
                         "properties": {
                             "PublicIpAddress": {
-                                "Id": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), resourceId('Microsoft.Network/publicIPAddresses/', concat(variables('mgmtPublicIPAddressName'), '1')), resourceId('Microsoft.Network/publicIPAddresses/', concat(variables('mgmtPublicIPAddressName'), '-az', variables('availabilityZoneNumber'), '1')))]"
+                                "Id": "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), resourceId('Microsoft.Network/publicIPAddresses/', concat(variables('mgmtPublicIPAddressName'), '1')), resourceId('Microsoft.Network/publicIPAddresses/', concat(variables('mgmtPublicIPAddressName'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '1')))]"
                             }, 
                             "privateIPAddress": "[variables('mgmtSubnetPrivateAddress1')]", 
                             "privateIPAllocationMethod": "Static", 
@@ -800,8 +841,8 @@
                 "[variables('vnetId')]", 
                 "[variables('extNsgID')]", 
                 "extpipcopy", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '0'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '-az', variables('availabilityZoneNumber'), '0'))]", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), variables('extLbId'), concat(variables('extLbId'), '-az', variables('availabilityZoneNumber')))]"
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '0'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '0'))]", 
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), variables('extLbId'), concat(variables('extLbId'), '-az', variables('availabilityZoneNumberForPublicIpAddresses')))]"
             ], 
             "location": "[variables('location')]",
             "name": "[concat(variables('extNicName'), '0')]", 
@@ -811,7 +852,7 @@
                         "name": "[concat(variables('instanceName'), '-self-ipconfig')]", 
                         "properties": {
                             "PublicIpAddress": {
-                                "Id": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat(variables('extSelfPublicIpAddressIdPrefix'), '0'), concat(variables('extSelfPublicIpAddressIdPrefix'), '-az', variables('availabilityZoneNumber'), '0'))]"
+                                "Id": "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat(variables('extSelfPublicIpAddressIdPrefix'), '0'), concat(variables('extSelfPublicIpAddressIdPrefix'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '0'))]"
                             }, 
                             "primary": true, 
                             "privateIPAddress": "[variables('extSubnetPrivateAddress')]", 
@@ -847,8 +888,8 @@
                 "[variables('vnetId')]", 
                 "[variables('extNsgID')]", 
                 "extpipcopy", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '1'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '-az', variables('availabilityZoneNumber'), '1'))]", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), variables('extLbId'), concat(variables('extLbId'), '-az', variables('availabilityZoneNumber')))]"
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '1'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '1'))]", 
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), variables('extLbId'), concat(variables('extLbId'), '-az', variables('availabilityZoneNumberForPublicIpAddresses')))]"
             ], 
             "location": "[variables('location')]",
             "name": "[concat(variables('extNicName'), '1')]", 
@@ -858,7 +899,7 @@
                         "name": "[concat(variables('instanceName'), '-self-ipconfig')]", 
                         "properties": {
                             "PublicIpAddress": {
-                                "Id": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat(variables('extSelfPublicIpAddressIdPrefix'), '1'), concat(variables('extSelfPublicIpAddressIdPrefix'), '-az', variables('availabilityZoneNumber'), '1'))]"
+                                "Id": "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat(variables('extSelfPublicIpAddressIdPrefix'), '1'), concat(variables('extSelfPublicIpAddressIdPrefix'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '1'))]"
                             }, 
                             "primary": true, 
                             "privateIPAddress": "[variables('extSubnetPrivateAddress1')]", 
@@ -894,8 +935,8 @@
                 "[variables('vnetId')]", 
                 "[variables('extNsgID')]", 
                 "extpipcopy", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '0'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '-az', variables('availabilityZoneNumber'), '0'))]", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), variables('intLbId'), concat(variables('intLbId'), '-az', variables('availabilityZoneNumber')))]"
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '0'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '0'))]", 
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), variables('intLbId'), concat(variables('intLbId'), '-az', variables('availabilityZoneNumberForPublicIpAddresses')))]"
             ], 
             "location": "[variables('location')]",
             "name": "[concat(variables('intNicName'), '0')]", 
@@ -936,8 +977,8 @@
                 "[variables('vnetId')]", 
                 "[variables('extNsgID')]", 
                 "extpipcopy", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '1'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '-az', variables('availabilityZoneNumber'), '1'))]", 
-                "[if(equals(parameters('availabilityOptions'), 'Availability Set'), variables('intLbId'), concat(variables('intLbId'), '-az', variables('availabilityZoneNumber')))]"
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '1'), concat('Microsoft.Network/publicIPAddresses/', variables('extSelfPublicIpAddressNamePrefix'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '1'))]", 
+                "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), variables('intLbId'), concat(variables('intLbId'), '-az', variables('availabilityZoneNumberForPublicIpAddresses')))]"
             ], 
             "location": "[variables('location')]",
             "name": "[concat(variables('intNicName'), '1')]", 
@@ -1022,13 +1063,16 @@
             "type": "Microsoft.Network/networkSecurityGroups"
         }, 
         {
-            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Set'), not(equals(variables('numberOfExternalIps'),0)))]", 
+            "condition": "[and(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), not(equals(variables('numberOfExternalIps'),0)))]", 
             "apiVersion": "[variables('networkApiVersion')]", 
              "dependsOn": [
                 "extpipcopy"
             ], 
             "location": "[variables('location')]", 
             "name": "[variables('externalLoadBalancerName')]",
+            "sku": {
+                "name": "[if(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'), 'Standard', 'Basic')]"
+            },
             "properties": {
                 "backendAddressPools": [
                     {
@@ -1054,13 +1098,13 @@
             "type": "Microsoft.Network/loadBalancers"
         },
         {
-            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(variables('numberOfExternalIps'),0)))]",
+            "condition": "[and(and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'))), not(equals(variables('numberOfExternalIps'),0)))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "dependsOn": [
                 "extpipcopy"
             ], 
             "location": "[variables('location')]",
-            "name": "[concat(variables('externalLoadBalancerName'), '-az', variables('availabilityZoneNumber'))]",
+            "name": "[concat(variables('externalLoadBalancerName'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'))]",
             "sku": {
                 "name": "Standard"
             },
@@ -1089,7 +1133,7 @@
             "type": "Microsoft.Network/loadBalancers"
         }, 
         {
-            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Set'), not(equals(parameters('internalLoadBalancerType'),'DO_NOT_USE')))]", 
+            "condition": "[and(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), not(equals(parameters('internalLoadBalancerType'),'DO_NOT_USE')))]", 
             "apiVersion": "[variables('networkApiVersion')]", 
             "dependsOn": [
                 "[variables('vnetId')]", 
@@ -1098,6 +1142,9 @@
             ], 
             "location": "[variables('location')]", 
             "name": "[variables('internalLoadBalancerName')]", 
+            "sku": {
+                "name": "[if(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'), 'Standard', 'Basic')]"
+            },
             "properties": {
                 "backendAddressPools": [
                     {
@@ -1154,7 +1201,7 @@
             "type": "Microsoft.Network/loadBalancers"
         }, 
         {
-            "condition": "[and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(parameters('internalLoadBalancerType'),'DO_NOT_USE')))]",
+            "condition": "[and(and(equals(parameters('availabilityOptions'), 'Availability Zone'), not(equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant'))), not(equals(parameters('internalLoadBalancerType'),'DO_NOT_USE')))]",
             "apiVersion": "[variables('networkApiVersion')]", 
             "dependsOn": [
                 "[variables('vnetId')]", 
@@ -1162,7 +1209,7 @@
                 "extpipcopy"
             ], 
             "location": "[variables('location')]", 
-            "name": "[concat(variables('internalLoadBalancerName'), '-az', variables('availabilityZoneNumber'))]", 
+            "name": "[concat(variables('internalLoadBalancerName'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'))]", 
             "sku": {
                 "name": "Standard"
             },
@@ -1189,18 +1236,18 @@
                         "name": "[if(equals(parameters('internalLoadBalancerType'),'Per-protocol'), concat('lbRule-', parameters('internalLoadBalancerProbePort')), 'allProtocolLbRule')]", 
                         "properties": {
                             "backendAddressPool": {
-                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('internalLoadBalancerName'), '-az',variables('availabilityZoneNumber'))), '/backendAddressPools/loadBalancerBackEnd')]"
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('internalLoadBalancerName'), '-az',variables('availabilityZoneNumberForPublicIpAddresses'))), '/backendAddressPools/loadBalancerBackEnd')]"
                             }, 
                             "backendPort": "[if(equals(parameters('internalLoadBalancerType'),'Per-protocol'), parameters('internalLoadBalancerProbePort'), 0)]", 
                             "enableFloatingIP": false, 
                             "frontendIPConfiguration": {
-                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('internalLoadBalancerName'), '-az',variables('availabilityZoneNumber'))), '/frontendIpConfigurations/loadBalancerFrontEnd')]"
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('internalLoadBalancerName'), '-az',variables('availabilityZoneNumberForPublicIpAddresses'))), '/frontendIpConfigurations/loadBalancerFrontEnd')]"
                             }, 
                             "frontendPort": "[if(equals(parameters('internalLoadBalancerType'),'Per-protocol'), parameters('internalLoadBalancerProbePort'), 0)]", 
                             "idleTimeoutInMinutes": 15, 
                             "loadDistribution": "Default", 
                             "probe": {
-                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('internalLoadBalancerName'), '-az',variables('availabilityZoneNumber'))), '/probes/tcp-probe-', parameters('internalLoadBalancerProbePort'))]"
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('internalLoadBalancerName'), '-az',variables('availabilityZoneNumberForPublicIpAddresses'))), '/probes/tcp-probe-', parameters('internalLoadBalancerProbePort'))]"
                             }, 
                             "protocol": "[if(equals(parameters('internalLoadBalancerType'),'Per-protocol'), 'Tcp', 'All')]"
                         }
@@ -1280,8 +1327,8 @@
                 "[concat('Microsoft.Network/networkInterfaces/', variables('intNicName'), '0')]"
             ],
             "location": "[variables('location')]",
-            "zones": ["[variables('availabilityZoneNumber')]"],
-            "name": "[concat(variables('dnsLabel'), '-', variables('instanceName'),concat('-az',variables('availabilityZoneNumber')), '0')]", 
+            "zones": ["[variables('availabilityZoneNumberForBigIpMember1')]"],
+            "name": "[concat(variables('dnsLabel'), '-', variables('instanceName'),concat('-az',variables('availabilityZoneNumberForBigIpMember1')), '0')]", 
             "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
             "properties": {
                 "diagnosticsProfile": {
@@ -1397,8 +1444,8 @@
                 "[concat('Microsoft.Network/networkInterfaces/', variables('intNicName'), '1')]"
             ],
             "location": "[variables('location')]",      
-            "zones": ["[variables('availabilityZoneNumber')]"],
-            "name": "[concat(variables('dnsLabel'), '-', variables('instanceName'),concat('-az',variables('availabilityZoneNumber')), '1')]", 
+            "zones": ["[variables('availabilityZoneNumberForBigIpMember2')]"],
+            "name": "[concat(variables('dnsLabel'), '-', variables('instanceName'),concat('-az',variables('availabilityZoneNumberForBigIpMember2')), '1')]", 
             "plan": "[if(variables('useCustomImage'), json('null'), variables('imagePlan'))]", 
             "properties": {
                 "diagnosticsProfile": {
@@ -1507,10 +1554,10 @@
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('computeApiVersion')]", 
             "dependsOn": [
-                "[concat('Microsoft.Compute/virtualMachines/', variables('dnsLabel'), '-', variables('instanceName'),concat('-az',variables('availabilityZoneNumber')), '0')]"
+                "[concat('Microsoft.Compute/virtualMachines/', variables('dnsLabel'), '-', variables('instanceName'),concat('-az',variables('availabilityZoneNumberForBigIpMember1')), '0')]"
             ], 
             "location": "[variables('location')]", 
-            "name": "[concat(variables('dnsLabel'),'-', variables('instanceName'), concat('-az',variables('availabilityZoneNumber')),'0/start')]", 
+            "name": "[concat(variables('dnsLabel'),'-', variables('instanceName'), concat('-az',variables('availabilityZoneNumberForBigIpMember1')),'0/start')]", 
             "properties": {
                 "autoUpgradeMinorVersion": "true", 
                 "protectedSettings": {
@@ -1561,10 +1608,10 @@
             "condition": "[equals(parameters('availabilityOptions'), 'Availability Zone')]",
             "apiVersion": "[variables('computeApiVersion')]", 
             "dependsOn": [
-                "[concat('Microsoft.Compute/virtualMachines/', variables('dnsLabel'), '-', variables('instanceName'),concat('-az',variables('availabilityZoneNumber')), '1')]"
+                "[concat('Microsoft.Compute/virtualMachines/', variables('dnsLabel'), '-', variables('instanceName'),concat('-az',variables('availabilityZoneNumberForBigIpMember2')), '1')]"
             ], 
             "location": "[variables('location')]", 
-            "name": "[concat(variables('dnsLabel'),'-', variables('instanceName'), concat('-az',variables('availabilityZoneNumber')),'1/start')]", 
+            "name": "[concat(variables('dnsLabel'),'-', variables('instanceName'), concat('-az',variables('availabilityZoneNumberForBigIpMember2')),'1/start')]", 
             "properties": {
                 "autoUpgradeMinorVersion": "true", 
                 "protectedSettings": {
@@ -1615,12 +1662,11 @@
     "outputs": {
         "GUI-URL": {
             "type": "string", 
-             "value": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat('https://', reference(concat(variables('mgmtPublicIPAddressId'), '0'), variables('networkApiVersion')).dnsSettings.fqdn, ':', variables('bigIpMgmtPort')), concat('https://', reference(concat(variables('mgmtPublicIPAddressId'), '-az', variables('availabilityZoneNumber'), '0'), variables('networkApiVersion')).dnsSettings.fqdn, ':', variables('bigIpMgmtPort')))]"
+             "value": "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat('https://', reference(concat(variables('mgmtPublicIPAddressId'), '0'), variables('networkApiVersion')).dnsSettings.fqdn, ':', variables('bigIpMgmtPort')), concat('https://', reference(concat(variables('mgmtPublicIPAddressId'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '0'), variables('networkApiVersion')).dnsSettings.fqdn, ':', variables('bigIpMgmtPort')))]"
         }, 
         "SSH-URL": {
             "type": "string", 
-            "value": "[if(equals(parameters('availabilityOptions'), 'Availability Set'), concat(reference(concat(variables('mgmtPublicIPAddressId'), '0'), variables('networkApiVersion')).dnsSettings.fqdn, ' ',22), concat(reference(concat(variables('mgmtPublicIPAddressId'), '-az', variables('availabilityZoneNumber'), '0'), variables('networkApiVersion')).dnsSettings.fqdn, ' ',22))]"
-
+            "value": "[if(or(equals(parameters('availabilityOptions'), 'Availability Set'), equals(variables('availabilityZoneNumberForPublicIpAddresses'), 'zoneredundant')), concat(reference(concat(variables('mgmtPublicIPAddressId'), '0'), variables('networkApiVersion')).dnsSettings.fqdn, ' ',22), concat(reference(concat(variables('mgmtPublicIPAddressId'), '-az', variables('availabilityZoneNumberForPublicIpAddresses'), '0'), variables('networkApiVersion')).dnsSettings.fqdn, ' ',22))]"
         }
     }
 }

@@ -1,8 +1,7 @@
-# Deploying the BIG-IP VE in Azure - ConfigSync Cluster (Active/Active): 3 NIC
+# Deploying the BIG-IP VE in Azure - ConfigSync Cluster (Active/Active): 3 NIC with support of Availability Zones 
 
-[![Slack Status](https://f5cloudsolutions.herokuapp.com/badge.svg)](https://f5cloudsolutions.herokuapp.com)
-[![Releases](https://img.shields.io/github/release/f5networks/f5-azure-arm-templates.svg)](https://github.com/f5networks/f5-azure-arm-templates/releases)
-[![Issues](https://img.shields.io/github/issues/f5networks/f5-azure-arm-templates.svg)](https://github.com/f5networks/f5-azure-arm-templates/issues)
+This template is experimental and not supported by F5
+
 
 ## Contents
 
